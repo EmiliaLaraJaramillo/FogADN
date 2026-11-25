@@ -196,3 +196,31 @@ def test_historial_api_y_exportacion(tmp_path, monkeypatch):
         csv_ = c.get("/api/historial.csv").text.lstrip("﻿").splitlines()
         assert csv_[0].startswith("id,sesion_id,archivo") and len(csv_) == 2
         ws.__exit__(None, None, None)
+
+
+def _con_salida(monkeypatch, texto):
+    import subprocess
+    from types import SimpleNamespace
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: SimpleNamespace(stdout=texto))
+
+
+def test_ip_hotspot_android_con_ip_addr(monkeypatch):
+    from app.transport.api import _ips_de_interfaces
+    _con_salida(monkeypatch, "1: lo    inet 127.0.0.1/8 scope host lo\n"
+                             "20: rmnet_data1    inet 10.54.3.2/30 scope global rmnet_data1\n"
+                             "21: wlan1    inet 192.168.43.1/24 brd 192.168.43.255 scope global wlan1\n")
+    assert _ips_de_interfaces() == ["192.168.43.1"]
+
+
+def test_ip_hotspot_android_con_ifconfig(monkeypatch):
+    from app.transport.api import _ips_de_interfaces
+    _con_salida(monkeypatch, "lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536\n        inet 127.0.0.1  netmask 255.0.0.0\n"
+                             "rmnet0: flags=65<UP,RUNNING>  mtu 1500\n        inet 10.1.2.3  netmask 255.255.255.252\n"
+                             "wlan0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500\n        inet 192.168.1.5  netmask 255.255.255.0\n")
+    assert _ips_de_interfaces() == ["192.168.1.5"]
+
+
+def test_fog_ip_tiene_prioridad(monkeypatch):
+    from app.transport.api import ips_locales
+    monkeypatch.setenv("FOG_IP", "10.9.8.7")
+    assert ips_locales()[0] == "10.9.8.7"

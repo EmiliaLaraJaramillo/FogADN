@@ -38,6 +38,24 @@ Deja esa ventana abierta (se apaga con `Ctrl+C`). Luego abre en el navegador del
 3. Pulsa **Iniciar procesamiento**. Los celulares pueden entrar o salir en cualquier momento.
 4. Los resultados se ven en vivo y quedan en el historial; se pueden exportar a CSV y JSON.
 
+## Master en un celular Android (Termux)
+
+El Master también puede correr en un celular **Android**, sin computador. Los otros dos celulares (cualquier modelo,
+también iPhone) se conectan igual que antes.
+
+1. Instala **Termux desde F-Droid** (no desde Play Store, esa versión está desactualizada).
+2. En Termux: `pkg install git` y luego `git clone https://github.com/EmiliaLaraJaramillo/FogADN.git`
+3. `cd FogADN` y `sh termux/instalar.sh` (una sola vez; necesita internet). Al final debe decir «Master importa bien».
+4. Activa el **hotspot** del celular Master y conecta los otros dos celulares a él.
+5. `sh termux/iniciar.sh` y deja Termux abierto (la pantalla puede apagarse, el script pide wake-lock; en Ajustes de Android
+   quita la optimización de batería a Termux).
+6. En Chrome del mismo celular abre **http://localhost:5000**. Sube el `.fna` con «Suelta un .fna aquí» (abre el selector
+   de archivos) o cópialo a la carpeta `data/`.
+7. «Agregar dispositivo» muestra el QR en la pantalla del Master; los otros dos celulares lo escanean.
+
+Si el QR sale con una IP que no es la del hotspot, elígela en «Red del Master» o arranca con la IP a mano:
+`sh termux/iniciar.sh 192.168.43.1`. Para ver las IPs del celular: `ifconfig` (o `ip addr`) en Termux.
+
 ## Archivos de prueba
 
 En `data\` hay tres archivos pequeños (`prueba1.fna`, `ecoli_k12.fna` de 4,5 MB y `prueba_5mb.fna`). Para crear uno más

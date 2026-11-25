@@ -20,14 +20,52 @@ from ..coordinador import Coordinador
 from ..fasta.bloques import leer_bloque
 
 
+def _ips_de_interfaces() -> List[str]:
+    """IPs IPv4 por interfaz usando `ip` o `ifconfig` (Termux/Android). En Android, el hotspot suele ser wlan*/ap*/swlan*
+    y los datos móviles rmnet*/ccmni*; el hotspot va primero y los datos móviles se descartan."""
+    import re
+    import subprocess
+    salida = ""
+    for cmd in (["ip", "-4", "-o", "addr"], ["ifconfig"]):
+        try:
+            salida = subprocess.run(cmd, capture_output=True, text=True, timeout=3).stdout
+        except (OSError, subprocess.SubprocessError):
+            continue
+        if salida.strip():
+            break
+    pares = []                                          # (interfaz, ip)
+    if "inet " in salida and "scope" in salida:         # formato de `ip -o`: "3: wlan0 inet 192.168.43.1/24 ..."
+        for m in re.finditer(r"^\d+:\s+(\S+)\s+inet\s+(\d+\.\d+\.\d+\.\d+)", salida, re.M):
+            pares.append((m.group(1), m.group(2)))
+    else:                                               # formato de ifconfig: bloque por interfaz
+        iface = ""
+        for linea in salida.splitlines():
+            if linea and not linea[0].isspace():
+                iface = linea.split(":")[0].split()[0]
+            m = re.search(r"inet (?:addr:)?(\d+\.\d+\.\d+\.\d+)", linea)
+            if m:
+                pares.append((iface, m.group(1)))
+    pares = [(i, ip) for i, ip in pares if not ip.startswith(("127.", "169.254.")) and not i.startswith(("lo", "rmnet", "ccmni", "tun", "dummy"))]
+    pares.sort(key=lambda p: 0 if p[0].startswith(("ap", "swlan", "wlan")) else 1)
+    return [ip for _, ip in pares]
+
+
 def ips_locales() -> List[str]:
-    """IPs IPv4 del Master; la primera es la de la ruta por defecto (la de la red Wi-Fi, normalmente)."""
+    """IPs IPv4 del Master. Orden: FOG_IP (si se define), interfaces de red (hotspot primero), ruta por defecto, nombre."""
+    import os
     ips: List[str] = []
+    if os.environ.get("FOG_IP"):
+        ips.append(os.environ["FOG_IP"].strip())
+    for ip in _ips_de_interfaces():
+        if ip not in ips:
+            ips.append(ip)
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         s.connect(("10.255.255.255", 1))               # no envía nada: solo consulta la ruta
-        ips.append(s.getsockname()[0])
+        ip = s.getsockname()[0]
         s.close()
+        if ip not in ips:
+            ips.append(ip)
     except OSError:
         pass
     try:
