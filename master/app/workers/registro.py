@@ -45,6 +45,12 @@ def limpiar_info(bruta: dict) -> Dict[str, object]:
         navegador=_texto(bruta.get("navegador")),
         nucleos=int(nucleos) if isinstance(nucleos, (int, float)) and nucleos > 0 else NO_DISPONIBLE,
         memoria_gb=float(memoria) if isinstance(memoria, (int, float)) and memoria > 0 else NO_DISPONIBLE,
+        tipo=_texto(bruta.get("tipo"), 30),
+        pantalla=_texto(bruta.get("pantalla"), 40),
+        gpu=_texto(bruta.get("gpu"), 80),
+        idioma=_texto(bruta.get("idioma"), 20),
+        zona_horaria=_texto(bruta.get("zona_horaria"), 40),
+        red=_texto(bruta.get("red"), 30),
     )
 
 

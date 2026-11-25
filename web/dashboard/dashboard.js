@@ -28,6 +28,24 @@
     if (e.textContent === texto) return;
     e.textContent = texto; e.classList.remove('tick'); void e.offsetWidth; e.classList.add('tick');
   }
+  // número que sube suavemente hasta su nuevo valor, con "+N" flotante cuando crece
+  function animarNumero(el, destino, conDelta) {
+    var desde = el._v === undefined ? destino : el._v;
+    if (destino === desde) { if (el._v === undefined) { el._v = destino; el.textContent = num(destino); } return; }
+    el._v = destino;
+    if (conDelta && destino > desde && desde > 0) {
+      var d = document.createElement('span'); d.className = 'delta'; d.textContent = '+' + num(destino - desde);
+      d.addEventListener('animationend', function () { d.remove(); });
+      el.parentNode.appendChild(d);
+    }
+    var t0 = performance.now(), dur_ = 700;
+    if (el._raf) cancelAnimationFrame(el._raf);
+    (function paso(t) {
+      var k = Math.min(1, Math.max(0, (t - t0) / dur_)), e = 1 - Math.pow(1 - k, 3);
+      el.textContent = num(Math.round(desde + (destino - desde) * e));
+      if (k < 1) el._raf = requestAnimationFrame(paso);
+    })(t0);
+  }
   function mensaje(id, texto, clase) { var e = $(id); e.textContent = texto || ''; e.className = 'msg' + (clase ? ' ' + clase : ''); }
 
   // ---------- reloj ----------
@@ -66,7 +84,10 @@
     if (pe.dataset.v !== se.estado) { pe.innerHTML = punto + txt[0]; pe.dataset.v = se.estado; }
     fijar('p-estado-d', txt[1]);
 
+    document.body.classList.toggle('en-curso', se.estado === 'en_curso');
     pintarWorkers(s);
+    pintarFlujo(s);
+    pintarGuia(s);
     pintarProceso(se);
     pintarResultados(se);
     pintarEventos(s.eventos);
@@ -78,27 +99,92 @@
     if (antes === 'en_curso' && !enCurso) { cargarArchivos(); setTimeout(cargarHistorial, 400); }
   }
 
-  // ---------- workers ----------
-  var CAMPOS = [['dispositivo', 'Dispositivo'], ['navegador', 'Navegador'], ['recursos', 'Núcleos · memoria'],
-                ['bloques', 'Bloques procesados'], ['tiempos', 'Proceso · descarga'], ['actual', 'Tarea actual'],
-                ['ultima', 'Última comunicación']];
+  // ---------- guía: siempre dice qué hacer ahora ----------
+  var accionGuia = null;
+  function resaltar(id) {
+    var e = $(id); e.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    e.classList.add('resaltado'); setTimeout(function () { e.classList.remove('resaltado'); }, 1800);
+  }
+  function pintarGuia(s) {
+    var se = s.sesion, n = s.conectados, g = $('guia'), btn = $('guia-btn');
+    var clase = '', paso = 1, titulo, texto, boton, accion;
+    var cel = n === 1 ? '1 celular' : n + ' celulares';
+    if (se.estado === 'en_curso') {
+      paso = 4; clase = 'proc';
+      if (n === 0) {
+        clase = 'alerta'; titulo = 'Procesando… esperando celulares';
+        texto = 'No hay celulares conectados. Conecta uno para que el procesamiento continúe.';
+        boton = 'Agregar dispositivo'; accion = function () { $('btn-agregar').click(); };
+      } else {
+        titulo = 'Procesando ' + num(se.progreso, 0) + ' %';
+        texto = cel + ' trabajando · ' + num(se.completados) + ' de ' + num(se.bloques) + ' bloques listos · ' + num(se.mb_s, 1) + ' MB/s';
+        boton = 'Cancelar'; accion = function () { $('btn-cancelar').click(); };
+      }
+    } else if (se.estado === 'completada' || se.estado === 'cancelada') {
+      paso = 4; clase = se.estado === 'completada' ? 'ok' : '';
+      var c = se.conteo, total = c.A + c.T + c.C + c.G;
+      titulo = se.estado === 'completada' ? '¡Listo! Procesamiento completado' : 'Procesamiento cancelado';
+      texto = se.estado === 'completada' ? num(total) + ' bases contadas en ' + dur(se.transcurrido_s) + '. Abajo puedes exportar el resultado.'
+                                         : 'Se contaron ' + num(total) + ' bases antes de cancelar.';
+      if (archivoElegido) {
+        texto += ' Puedes procesar de nuevo ' + archivoElegido + ' o elegir otro en el paso 2.';
+        boton = 'Procesar de nuevo'; accion = function () { $('btn-iniciar').click(); };
+      } else { boton = 'Procesar otro archivo'; accion = function () { resaltar('archivo'); }; }
+    } else if (n === 0) {
+      paso = 1; titulo = 'Paso 1 · Conecta los celulares';
+      texto = 'Pulsa «Agregar dispositivo» y escanea el código QR con cada celular. Verás aquí sus características.';
+      boton = 'Agregar dispositivo'; accion = function () { $('btn-agregar').click(); };
+    } else if (!archivoElegido) {
+      paso = 2; titulo = 'Paso 2 · Elige el archivo';
+      texto = cel + (n === 1 ? ' conectado' : ' conectados') + '. Elige un archivo reciente de la lista o sube uno .fna.';
+      boton = 'Elegir archivo'; accion = function () { resaltar('archivo'); };
+    } else {
+      paso = 3; clase = 'ok'; titulo = 'Paso 3 · Todo listo';
+      texto = cel + ' y el archivo ' + archivoElegido + '. Pulsa para repartir el trabajo.';
+      boton = 'Iniciar procesamiento'; accion = function () { $('btn-iniciar').click(); };
+    }
+    g.className = 'guia' + (clase ? ' ' + clase : '');
+    fijar('guia-titulo', titulo); fijar('guia-texto', texto); fijar('guia-btn', boton);
+    btn.className = (boton === 'Cancelar' ? 'guia-btn-sec' : 'primario') + ' grande';
+    accionGuia = accion;
+    g.querySelectorAll('.guia-pasos li').forEach(function (li) {
+      var p = parseInt(li.dataset.p, 10);
+      li.className = p < paso ? 'hecho' : (p === paso ? 'actual' : '');
+    });
+  }
+  $('guia-btn').onclick = function () { if (accionGuia) accionGuia(); };
 
-  function crearTarjeta(w) {
-    var art = document.createElement('article');
-    art.className = 'w';
-    var cab = document.createElement('div'); cab.className = 'w-cab';
-    var id = document.createElement('span'); id.className = 'w-id'; id.textContent = w.id;
-    var pas = document.createElement('span'); pas.className = 'pastilla'; pas.dataset.k = 'estado';
-    cab.appendChild(id); cab.appendChild(pas); art.appendChild(cab);
-    var pr = document.createElement('div'); pr.className = 'progreso'; var ba = document.createElement('div'); ba.dataset.k = 'barra';
-    pr.appendChild(ba); art.appendChild(pr);
+  // ---------- workers ----------
+  var CAR = [['modelo', 'Modelo'], ['sistema', 'Sistema'], ['navegador', 'Navegador'], ['hilos', 'Hilos del procesador'],
+             ['memoria', 'Memoria'], ['pantalla', 'Pantalla'], ['gpu', 'GPU'], ['idioma', 'Idioma · zona horaria'], ['red', 'Red del celular']];
+  var REN = [['bloques', 'Bloques procesados'], ['desc', 'Velocidad de descarga'], ['cont', 'Velocidad de conteo'],
+             ['actual', 'Tarea actual'], ['ultima', 'Última comunicación']];
+  var ND = 'No disponible';
+
+  function lista(campos) {
     var dl = document.createElement('dl');
-    CAMPOS.forEach(function (c) {
+    campos.forEach(function (c) {
       var dt = document.createElement('dt'); dt.textContent = c[1];
       var dd = document.createElement('dd'); dd.dataset.k = c[0];
       dl.appendChild(dt); dl.appendChild(dd);
     });
-    art.appendChild(dl);
+    return dl;
+  }
+  function crearTarjeta(w) {
+    var art = document.createElement('article');
+    art.className = 'w';
+    var cab = document.createElement('div'); cab.className = 'w-cab';
+    var tit = document.createElement('div'); tit.className = 'w-titulo';
+    var b = document.createElement('b'); b.dataset.k = 'titulo';
+    var sm = document.createElement('small'); sm.textContent = 'ID ' + w.id;
+    tit.appendChild(b); tit.appendChild(sm);
+    var pas = document.createElement('span'); pas.className = 'pastilla'; pas.dataset.k = 'estado';
+    cab.appendChild(tit); cab.appendChild(pas); art.appendChild(cab);
+    var pr = document.createElement('div'); pr.className = 'progreso'; var ba = document.createElement('div'); ba.dataset.k = 'barra';
+    pr.appendChild(ba); art.appendChild(pr);
+    var h1 = document.createElement('h4'); h1.textContent = 'Características del celular';
+    var h2 = document.createElement('h4'); h2.textContent = 'Trabajo en esta sesión';
+    art.appendChild(h1); art.appendChild(lista(CAR)); art.appendChild(h2); art.appendChild(lista(REN));
     return art;
   }
 
@@ -106,8 +192,10 @@
     var e = art.querySelector('[data-k="' + k + '"]');
     var t = String(valor);
     if (e.textContent !== t) e.textContent = t;
-    e.classList.toggle('nd', t === 'No disponible');
+    e.classList.toggle('nd', t === ND || t === '—');
   }
+  function velocidad(bytes, ms) { return ms > 0 ? num(bytes / 1048576 / (ms / 1000), 1) + ' MB/s' : '—'; }
+  function nombreCel(w) { return w.tipo !== ND ? w.tipo : (w.modelo !== ND ? w.modelo : 'Celular'); }
 
   var ROT = { disponible: 'Disponible', procesando: 'Procesando', completado: 'Completado', desconectado: 'Desconectado', error: 'Error' };
 
@@ -122,13 +210,19 @@
       p.textContent = ROT[w.estado] || w.estado;
       p.className = 'pastilla ' + w.estado;
       art.querySelector('[data-k="barra"]').style.width = (w.estado === 'procesando' ? w.progreso : 0) + '%';
-      var nd = 'No disponible';
-      dato(art, 'dispositivo', (w.modelo === nd ? 'Modelo ' + nd.toLowerCase() : w.modelo) + ' · ' + w.plataforma);
+      dato(art, 'titulo', nombreCel(w));
+      dato(art, 'modelo', w.modelo);
+      dato(art, 'sistema', w.plataforma);
       dato(art, 'navegador', w.navegador);
-      dato(art, 'recursos', (typeof w.nucleos === 'number' ? w.nucleos + ' núcleos' : 'Núcleos ' + nd.toLowerCase()) + ' · ' +
-                            (typeof w.memoria_gb === 'number' ? '≈ ' + num(w.memoria_gb, 0) + ' GB' : 'memoria ' + nd.toLowerCase()));
+      dato(art, 'hilos', typeof w.nucleos === 'number' ? w.nucleos + ' hilos' : ND);
+      dato(art, 'memoria', typeof w.memoria_gb === 'number' ? '≈ ' + num(w.memoria_gb, 0) + ' GB' : ND);
+      dato(art, 'pantalla', w.pantalla);
+      dato(art, 'gpu', w.gpu);
+      dato(art, 'idioma', (w.idioma !== ND || w.zona_horaria !== ND) ? (w.idioma !== ND ? w.idioma : '—') + ' · ' + (w.zona_horaria !== ND ? w.zona_horaria : '—') : ND);
+      dato(art, 'red', w.red);
       dato(art, 'bloques', num(w.bloques_procesados) + ' · ' + tam(w.bytes_procesados));
-      dato(art, 'tiempos', num(w.t_proceso_ms / 1000, 1) + ' s · ' + num(w.t_transfer_ms / 1000, 1) + ' s');
+      dato(art, 'desc', velocidad(w.bytes_procesados, w.t_transfer_ms));
+      dato(art, 'cont', velocidad(w.bytes_procesados, w.t_proceso_ms));
       var idx = w.tarea_actual ? parseInt(w.tarea_actual.split('-').pop(), 10) + 1 : null;
       dato(art, 'actual', idx ? 'Bloque ' + num(idx) : '—');
       var hace = Math.max(0, s.ahora - w.ultima_comunicacion);
@@ -138,6 +232,81 @@
       if (!vistos[id]) { tarjetas[id].remove(); delete tarjetas[id]; }
     });
     $('sin-workers').hidden = s.workers.length > 0;
+  }
+
+  // ---------- envío de paquetes (animación + registro) ----------
+  var ultimoPaquete = null, ultimoVistoTabla = null, carriles = {};
+  var ETIQ = { envio: 'Enviado', resultado: 'Recibido', perdido: 'Vuelve a la cola' };
+  function fijar2(e, t) { if (e.textContent !== t) e.textContent = t; }
+
+  function carril(w) {
+    var c = carriles[w.id];
+    if (c) return c;
+    var fila = document.createElement('div'); fila.className = 'carril';
+    var via = document.createElement('div'); via.className = 'via';
+    var caja = document.createElement('div'); caja.className = 'carril-w';
+    var b = document.createElement('b'); var sp = document.createElement('span');
+    caja.appendChild(b); caja.appendChild(sp); fila.appendChild(via); fila.appendChild(caja);
+    $('carriles').appendChild(fila);
+    return (carriles[w.id] = { fila: fila, via: via, b: b, sp: sp });
+  }
+  function lanzar(c, clase, texto) {
+    var el = document.createElement('i'); el.className = 'paquete ' + clase; el.textContent = texto;
+    el.addEventListener('animationend', function () { el.remove(); });
+    c.via.appendChild(el);
+  }
+
+  function pintarFlujo(s) {
+    var hay = s.workers.length > 0 && (s.paquetes.length > 0 || s.sesion.estado === 'en_curso');
+    $('red').hidden = s.workers.length === 0;
+    $('sin-flujo').hidden = hay;
+    fijar('f-master', s.master.nombre);
+    var vivos = {};
+    s.workers.forEach(function (w) {
+      vivos[w.id] = true;
+      var c = carril(w);
+      c.fila.style.opacity = w.estado === 'desconectado' ? '.45' : '1';
+      fijar2(c.b, nombreCel(w) + ' · ' + w.id);
+      fijar2(c.sp, w.estado === 'procesando' && w.tarea_actual ? 'Procesa el bloque ' + (parseInt(w.tarea_actual.split('-').pop(), 10) + 1)
+                                                               : (ROT[w.estado] || w.estado));
+    });
+    Object.keys(carriles).forEach(function (id) { if (!vivos[id]) { carriles[id].fila.remove(); delete carriles[id]; } });
+
+    var ult = s.paquetes.length ? s.paquetes[s.paquetes.length - 1].n : 0;
+    if (ultimoPaquete !== null && ult < ultimoPaquete) ultimoPaquete = 0;          // sesión nueva: la numeración reinicia
+    var nuevos = ultimoPaquete === null ? [] : s.paquetes.filter(function (p) { return p.n > ultimoPaquete; });
+    ultimoPaquete = ult;
+    nuevos.forEach(function (p) {
+      var c = carriles[p.worker];
+      if (!c) return;
+      if (p.tipo === 'envio') lanzar(c, 'env', 'Bloque ' + num(p.bloque) + ' · ' + tam(p.bytes));
+      else if (p.tipo === 'resultado') lanzar(c, 'res', '+' + num(p.bases) + ' bases');
+      else lanzar(c, 'per', 'Bloque ' + num(p.bloque) + ' sin terminar');
+    });
+
+    var cuerpo = $('paquetes'), firma = s.paquetes.map(function (p) { return p.n; }).join(',');
+    if (cuerpo.dataset.f !== firma) {
+      var primera = cuerpo.dataset.f === undefined, previo = ultimoVistoTabla;
+      cuerpo.dataset.f = firma; cuerpo.textContent = '';
+      s.paquetes.slice().reverse().slice(0, 14).forEach(function (p) {
+        var tr = document.createElement('tr');
+        if (!primera && previo !== null && p.n > previo) tr.className = 'nuevo';
+        var celda = function (t, cl) { var td = document.createElement('td'); td.textContent = t; if (cl) td.className = cl; tr.appendChild(td); };
+        var w = s.workers.filter(function (x) { return x.id === p.worker; })[0];
+        celda(hora(p.t)); celda('#' + num(p.bloque)); celda(p.worker + (w && w.tipo !== ND ? ' · ' + w.tipo : ''));
+        var ev = document.createElement('td'), sp = document.createElement('span');
+        sp.className = 'ev ' + p.tipo; sp.textContent = ETIQ[p.tipo]; ev.appendChild(sp); tr.appendChild(ev);
+        celda(tam(p.bytes), 'n');
+        celda(p.tipo === 'resultado' ? num(p.t_transfer_ms) + ' ms' : '—', 'n');
+        celda(p.tipo === 'resultado' ? num(p.t_proceso_ms) + ' ms' : '—', 'n');
+        celda(p.tipo === 'resultado' ? num(p.bases) : '—', 'n');
+        cuerpo.appendChild(tr);
+      });
+      ultimoVistoTabla = ult;
+    }
+    var se = s.sesion;
+    fijar('f-env', num(se.archivo ? se.completados + se.asignados : 0));
+    fijar('f-rec', num(se.archivo ? se.completados : 0));
   }
 
   // ---------- procesamiento ----------
@@ -183,10 +352,12 @@
     var total = c.A + c.T + c.C + c.G;
     ['A', 'T', 'C', 'G'].forEach(function (b) {
       var el = document.querySelector('.base[data-b="' + b + '"]');
-      cambiar(el.querySelector('b'), hay ? num(c[b]) : '—');
+      var bb = el.querySelector('b');
+      if (hay) animarNumero(bb, c[b], true); else { bb._v = undefined; bb.textContent = '—'; }
+      el.querySelector('.pj').textContent = hay && total ? num(100 * c[b] / total, 1) + ' %' : '';
       el.querySelector('.progreso > div').style.width = (hay && total ? 100 * c[b] / total : 0) + '%';
     });
-    cambiar($('r-total'), hay ? num(total) : '—');
+    if (hay) animarNumero($('r-total'), total, true); else { $('r-total')._v = undefined; $('r-total').textContent = '—'; }
     fijar('r-otros', hay ? 'Además, ' + num(c.otros) + ' caracteres no ATCG (N y otros), que no entran en el total.' : '');
     fijar('r-archivo', hay ? se.archivo : '—');
     fijar('r-estado', NOMBRE_ESTADO[se.estado] || '—');
@@ -217,6 +388,7 @@
       });
       if (archivoElegido && !lista.some(function (a) { return a.nombre === archivoElegido; })) archivoElegido = null;
       refrescarBoton();
+      if (estadoActual) pintarGuia(estadoActual);
     });
   }
   function elegir(nombre) { archivoElegido = nombre; mensaje('archivo-msg', ''); cargarArchivos(); }

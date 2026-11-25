@@ -30,6 +30,8 @@ class Coordinador:
         self.estado_sesion = "sin_sesion"      # sin_sesion | en_curso | completada | cancelada
         self.t_inicio = self.t_fin = 0.0
         self.eventos: List[Dict] = []          # bitácora corta que se muestra en el dashboard
+        self.paquetes: List[Dict] = []         # bloques enviados / resultados recibidos (animación del dashboard)
+        self._n_paquete = 0
 
     # --- sesión -----------------------------------------------------------------------------------------------
     def iniciar_sesion(self, ruta: str, tamano_bloque: Optional[int] = None) -> Dict:
@@ -42,6 +44,7 @@ class Coordinador:
         self.archivo = ruta
         self.estado_sesion, self.t_inicio, self.t_fin = "en_curso", self.reloj(), 0.0
         self._guardada = False
+        self.paquetes, self._n_paquete = [], 0
         for w in self.registro.conectados():
             w.estado, w.progreso, w.bloques_procesados, w.bytes_procesados = "disponible", 0.0, 0, 0
             w.t_proceso_ms = w.t_transfer_ms = 0.0
@@ -82,6 +85,7 @@ class Coordinador:
         if t is None:
             return "no_task", {"motivo": "esperando"}     # hay bloques asignados a otros; pueden volver a la cola
         w.estado, w.tarea_actual, w.progreso = "procesando", t.id, 0.0
+        self._paquete("envio", w.id, t.indice + 1, t.longitud)
         return "task", dict(task_id=t.id, indice=t.indice, offset=t.offset, longitud=t.longitud,
                             total=len(self.cola.tareas), intento=t.intentos)
 
@@ -99,6 +103,9 @@ class Coordinador:
             if motivo != "duplicado":
                 w.errores += 1
             return False, motivo
+        t = self.cola.tareas[task_id]
+        self._paquete("resultado", w.id, t.indice + 1, t.longitud, t_transfer_ms=round(float(t_transfer_ms or 0)),
+                      t_proceso_ms=round(float(t_proceso_ms or 0)), bases=sum(int(conteo.get(k, 0)) for k in "ATCG"))
         w.bloques_procesados += 1
         w.bytes_procesados += n_bytes
         w.t_proceso_ms += max(0.0, float(t_proceso_ms or 0))
@@ -118,6 +125,9 @@ class Coordinador:
             return []
         w.estado, w.tarea_actual, w.progreso = "desconectado", None, 0.0
         liberadas = self.cola.liberar_de(worker_id) if self.cola and self.estado_sesion == "en_curso" else []
+        for tid in liberadas:
+            t = self.cola.tareas[tid]
+            self._paquete("perdido", w.id, t.indice + 1, t.longitud)
         self._evento(f"{w.id} desconectado ({motivo})" + (f"; {len(liberadas)} bloque(s) vuelven a la cola" if liberadas else ""))
         return liberadas
 
@@ -150,7 +160,7 @@ class Coordinador:
                           t_proceso_s=round(sum(w.t_proceso_ms for w in self.registro.workers.values()) / 1000, 2),
                           workers_participantes=len({t.completada_por for t in self.cola.tareas.values() if t.completada_por}))
         return dict(ahora=ahora, sesion=sesion, workers=[w.visible() for w in self.registro.workers.values()],
-                    conectados=len(self.registro.conectados()), eventos=self.eventos[-12:])
+                    conectados=len(self.registro.conectados()), eventos=self.eventos[-12:], paquetes=self.paquetes[-30:])
 
     def _guardar(self):
         """Registra la ejecución en el historial, una sola vez por sesión."""
@@ -175,6 +185,13 @@ class Coordinador:
                 "duracion_s": dur, "velocidad_media_mb_s": s["mb_s"], "t_transferencia_s": s["t_transfer_s"],
                 "t_procesamiento_s": s["t_proceso_s"], "A": c["A"], "T": c["T"], "C": c["C"], "G": c["G"],
                 "otros": c["otros"], "total_bases": c["A"] + c["T"] + c["C"] + c["G"]}
+
+    def _paquete(self, tipo: str, worker: str, bloque: int, n_bytes: int, **extra):
+        """tipo: envio (Master → celular), resultado (celular → Master) o perdido (el bloque vuelve a la cola)."""
+        self._n_paquete += 1
+        self.paquetes.append(dict(n=self._n_paquete, t=self.reloj(), tipo=tipo, worker=worker, bloque=bloque,
+                                  bytes=n_bytes, **extra))
+        del self.paquetes[:-60]
 
     def _evento(self, texto: str):
         self.eventos.append(dict(t=self.reloj(), texto=texto))

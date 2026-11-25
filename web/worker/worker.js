@@ -34,6 +34,16 @@
     $('t-cont').textContent = fmt(totales.conteoMs / 1000, 1) + ' s';
   }
 
+  function gpuRender() {
+    try {
+      var c = document.createElement('canvas');
+      var g = c.getContext('webgl') || c.getContext('experimental-webgl');
+      if (!g) return null;
+      var e = g.getExtension('WEBGL_debug_renderer_info');
+      return String(e ? g.getParameter(e.UNMASKED_RENDERER_WEBGL) : g.getParameter(g.RENDERER));
+    } catch (x) { return null; }
+  }
+
   // --- lo que el navegador permite saber del dispositivo (lo ausente se envía como null) ---
   function infoDispositivo() {
     var ua = navigator.userAgent || '';
@@ -49,9 +59,20 @@
     // En Android moderno Chrome oculta el modelo en la cadena del navegador ("K"); en iOS nunca lo informa.
     var modelo = null;
     if ((m = ua.match(/Android [\d.]+; ([^;)]+)/)) && m[1] !== 'K' && !/^(Mobile|Linux)$/.test(m[1])) modelo = m[1].trim();
+    var tipo = null;
+    if (/iPhone/.test(ua)) tipo = 'iPhone';
+    else if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) tipo = 'iPad';   // iPadOS se hace pasar por Mac
+    else if (/Android/.test(ua)) tipo = /Mobile/.test(ua) ? 'Android (celular)' : 'Android (tablet)';
+    var pantalla = null;
+    try { pantalla = screen.width + '×' + screen.height + ' @' + (window.devicePixelRatio || 1) + 'x'; } catch (e) {}
+    var zona = null;
+    try { zona = Intl.DateTimeFormat().resolvedOptions().timeZone || null; } catch (e) {}
+    var cn = navigator.connection || null;
     return {
-      modelo: modelo, plataforma: plat, navegador: nav,
-      nucleos: navigator.hardwareConcurrency || null,
+      modelo: modelo, plataforma: plat, navegador: nav, tipo: tipo, pantalla: pantalla, gpu: gpuRender(),
+      idioma: navigator.language || null, zona_horaria: zona,
+      red: cn ? ((cn.effectiveType || '') + (cn.downlink ? ' · ' + cn.downlink + ' Mb/s' : '')) || null : null,   // no existe en Safari
+      nucleos: navigator.hardwareConcurrency || null,     // hilos lógicos del procesador
       memoria_gb: navigator.deviceMemory || null      // solo en Chrome y en contexto seguro (https); en http no existe
     };
   }
@@ -59,6 +80,8 @@
   $('nav').textContent = info.navegador || 'No disponible';
   $('plat').textContent = info.plataforma || 'No disponible';
   $('nuc').textContent = info.nucleos || 'No disponible';
+  $('pan').textContent = info.pantalla || 'No disponible';
+  $('tipo').textContent = info.tipo || 'No disponible';
 
   // --- Web Worker de conteo ---
   function crearContador() {

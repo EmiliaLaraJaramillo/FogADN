@@ -25,13 +25,38 @@
 
 <div class="app">
 
-  <!-- Panel izquierdo: archivo y dispositivos -->
-  <aside class="lateral" aria-label="Archivo y dispositivos">
-    <section class="panel" id="archivo">
-      <h2>Archivo</h2>
-      <div id="zona" class="zona" tabindex="0" role="button" aria-label="Soltar un archivo .fna o pulsar para elegirlo">
+  <!-- Guía: siempre dice qué hacer ahora -->
+  <section id="guia" class="guia" aria-live="polite">
+    <ol class="guia-pasos" aria-label="Pasos">
+      <li data-p="1"><i>1</i>Conectar celulares</li>
+      <li data-p="2"><i>2</i>Elegir archivo</li>
+      <li data-p="3"><i>3</i>Procesar</li>
+    </ol>
+    <div class="guia-cuerpo">
+      <div class="guia-texto">
+        <b id="guia-titulo">Conecta los celulares</b>
+        <span id="guia-texto">Pulsa «Agregar dispositivo» y escanea el código QR con cada celular.</span>
+      </div>
+      <button id="guia-btn" class="primario grande" type="button">Agregar dispositivo</button>
+    </div>
+  </section>
+
+  <!-- Panel izquierdo: los tres pasos -->
+  <aside class="lateral" aria-label="Pasos para procesar">
+    <section class="panel colapsa" id="dispositivos">
+      <h2><span class="num">1</span>Conecta los celulares</h2>
+      <p class="ayuda">Cada celular escanea un QR y se une al Master. Pueden entrar o salir cuando quieran.</p>
+      <div class="fila">
+        <button id="btn-agregar" class="secundario" type="button">Agregar dispositivo</button>
+        <span class="contador"><b id="c-n">0</b> conectados</span>
+      </div>
+    </section>
+
+    <section class="panel colapsa" id="archivo">
+      <h2><span class="num">2</span>Elige el archivo</h2>
+      <div id="zona" class="zona" tabindex="0" role="button" aria-label="Subir un archivo .fna">
         <div class="zona-icono" aria-hidden="true"></div>
-        <div><b>Suelta un .fna aquí</b><span>o pulsa para elegirlo</span></div>
+        <div><b>Subir un archivo .fna</b><span>pulsa aquí o suéltalo aquí</span></div>
         <input id="entrada" type="file" hidden>
       </div>
       <div id="subida" class="subida" hidden>
@@ -42,27 +67,22 @@
 
       <h3>Archivos recientes</h3>
       <ul id="lista-archivos" class="lista"></ul>
+    </section>
 
-      <div class="fila ajuste">
-        <label for="tam-bloque">Tamaño de bloque</label>
+    <section class="panel colapsa" id="procesar">
+      <h2><span class="num">3</span>Procesar</h2>
+      <div class="fila ajuste primero">
+        <label for="tam-bloque">Tamaño de cada paquete</label>
         <select id="tam-bloque">
           <option value="1">1 MB</option><option value="4">4 MB</option><option value="8">8 MB</option>
           <option value="16" selected>16 MB</option>
         </select>
       </div>
       <div class="acciones">
-        <button id="btn-iniciar" class="primario" type="button" disabled>Iniciar procesamiento</button>
+        <button id="btn-iniciar" class="primario grande" type="button" disabled>Iniciar procesamiento</button>
         <button id="btn-cancelar" class="secundario" type="button" hidden>Cancelar</button>
       </div>
       <p id="archivo-msg" class="msg" role="status"></p>
-    </section>
-
-    <section class="panel" id="dispositivos">
-      <h2>Dispositivos</h2>
-      <div class="fila">
-        <button id="btn-agregar" class="secundario" type="button">Agregar dispositivo</button>
-        <span class="contador"><b id="c-n">0</b> conectados</span>
-      </div>
     </section>
 
     <p class="pie">Fog (Master) · Edge (celulares) · Cloud: no activado; la arquitectura queda preparada.</p>
@@ -81,10 +101,10 @@
 
       <div class="vivo">
         <div id="bases" class="bases">
-          <div class="base" data-b="A"><span>A</span><b>—</b><div class="progreso"><div></div></div></div>
-          <div class="base" data-b="T"><span>T</span><b>—</b><div class="progreso"><div></div></div></div>
-          <div class="base" data-b="C"><span>C</span><b>—</b><div class="progreso"><div></div></div></div>
-          <div class="base" data-b="G"><span>G</span><b>—</b><div class="progreso"><div></div></div></div>
+          <div class="base" data-b="A"><span>A</span><em class="pj"></em><b>—</b><div class="progreso"><div></div></div></div>
+          <div class="base" data-b="T"><span>T</span><em class="pj"></em><b>—</b><div class="progreso"><div></div></div></div>
+          <div class="base" data-b="C"><span>C</span><em class="pj"></em><b>—</b><div class="progreso"><div></div></div></div>
+          <div class="base" data-b="G"><span>G</span><em class="pj"></em><b>—</b><div class="progreso"><div></div></div></div>
         </div>
         <div class="lado">
           <div class="total"><span class="et">Bases procesadas (A + T + C + G)</span><b id="r-total">—</b><small id="r-otros"></small></div>
@@ -109,12 +129,38 @@
       </div>
     </section>
 
+    <!-- Envío de paquetes -->
+    <section class="tarjeta" id="flujo">
+      <div class="fila">
+        <h2>Envío de paquetes</h2>
+        <span class="contador"><b id="f-env">0</b> enviados · <b id="f-rec">0</b> recibidos</span>
+      </div>
+      <p class="ayuda">Cada bloque del archivo viaja del Master a un celular; el celular cuenta A, T, C y G y devuelve solo cuatro números.</p>
+      <div class="red" id="red" hidden>
+        <div class="nodo-master"><span class="et">Master</span><b id="f-master">—</b><small>reparte y suma</small></div>
+        <div id="carriles" class="carriles"></div>
+      </div>
+      <p id="sin-flujo" class="vacio">Los paquetes aparecerán aquí cuando empiece el procesamiento.</p>
+      <div class="leyenda">
+        <span><i class="cuad env"></i>Bloque enviado al celular</span>
+        <span><i class="cuad res"></i>Resultado devuelto al Master</span>
+        <span><i class="cuad per"></i>Bloque devuelto a la cola</span>
+      </div>
+      <div class="tabla-caja corta">
+        <table class="tabla">
+          <thead><tr><th>Hora</th><th>Bloque</th><th>Celular</th><th>Evento</th><th class="n">Tamaño</th>
+            <th class="n">Descarga</th><th class="n">Conteo</th><th class="n">Bases contadas</th></tr></thead>
+          <tbody id="paquetes"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- D · Workers y detalle del resultado -->
     <div class="fila-2">
       <section class="tarjeta" id="sec-workers">
-        <div class="fila"><h2>Workers</h2><span class="contador"><b id="c-n2">0</b> conectados</span></div>
+        <div class="fila"><h2>Celulares conectados</h2><span class="contador"><b id="c-n2">0</b> conectados</span></div>
         <div id="workers" class="cuadricula-w"></div>
-        <p id="sin-workers" class="vacio">Todavía no hay celulares conectados. Usa «Agregar dispositivo».</p>
+        <p id="sin-workers" class="vacio">Todavía no hay celulares. Cuando uno escanee el QR, aquí verás sus características.</p>
       </section>
 
       <section class="tarjeta" id="resultados">

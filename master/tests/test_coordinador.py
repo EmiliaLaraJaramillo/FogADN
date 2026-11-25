@@ -170,3 +170,23 @@ def test_historial_se_guarda_una_vez_al_completar_y_al_cancelar(tmp_path):
     c.cancelar_sesion()
     filas = c.storage.listar_ejecuciones()
     assert [f["estado"] for f in filas] == ["cancelada", "completada"]      # la más reciente primero
+
+
+def test_paquetes_registran_envio_resultado_y_bloque_perdido(entorno):
+    c, _, ruta, _ = entorno
+    a, b = c.hello({}, None).id, c.hello({}, None).id
+    ta, tb = pedir(c, a), pedir(c, b)
+    assert procesar(c, a, ruta, ta) == (True, "ok")
+    c.desconectar(b)
+    p = c.snapshot()["paquetes"]
+    assert [x["tipo"] for x in p] == ["envio", "envio", "resultado", "perdido"]
+    assert [x["n"] for x in p] == [1, 2, 3, 4]
+    assert p[2]["worker"] == a and p[2]["bloque"] == ta["indice"] + 1 and p[2]["bases"] > 0
+    assert p[3]["worker"] == b and p[3]["bloque"] == tb["indice"] + 1
+
+
+def test_hello_guarda_caracteristicas_del_celular(entorno):
+    c, _, _, _ = entorno
+    w = c.hello({"tipo": "iPhone", "pantalla": "390×844 @3x", "gpu": "Apple GPU", "nucleos": 6}, None)
+    assert (w.info["tipo"], w.info["pantalla"], w.info["gpu"], w.info["nucleos"]) == ("iPhone", "390×844 @3x", "Apple GPU", 6)
+    assert w.info["idioma"] == "No disponible"
