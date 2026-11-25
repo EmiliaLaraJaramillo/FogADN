@@ -155,7 +155,7 @@
   $('guia-btn').onclick = function () { if (accionGuia) accionGuia(); };
 
   // ---------- workers ----------
-  var CAR = [['modelo', 'Modelo'], ['sistema', 'Sistema'], ['navegador', 'Navegador'], ['hilos', 'Hilos del procesador'],
+  var CAR = [['modelo', 'Modelo'], ['sistema', 'Sistema'], ['navegador', 'Navegador'], ['hilos', 'Hilos del procesador'], ['hilos_uso', 'Hilos contando bases'],
              ['memoria', 'Memoria'], ['pantalla', 'Pantalla'], ['gpu', 'GPU'], ['idioma', 'Idioma · zona horaria'], ['red', 'Red del celular']];
   var REN = [['bloques', 'Bloques procesados'], ['desc', 'Velocidad de descarga'], ['cont', 'Velocidad de conteo'],
              ['actual', 'Tarea actual'], ['ultima', 'Última comunicación']];
@@ -215,6 +215,7 @@
       dato(art, 'sistema', w.plataforma);
       dato(art, 'navegador', w.navegador);
       dato(art, 'hilos', typeof w.nucleos === 'number' ? w.nucleos + ' hilos' : ND);
+      dato(art, 'hilos_uso', typeof w.hilos_conteo === 'number' ? w.hilos_conteo + ' en paralelo' : ND);
       dato(art, 'memoria', typeof w.memoria_gb === 'number' ? '≈ ' + num(w.memoria_gb, 0) + ' GB' : ND);
       dato(art, 'pantalla', w.pantalla);
       dato(art, 'gpu', w.gpu);

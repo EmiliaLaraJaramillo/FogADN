@@ -12,7 +12,8 @@
   var latidoS = 3, reintentoS = 1, temporizadorLatido = null;
   var enProceso = false, progresoActual = 0, tareaActual = null, resultadoPendiente = null, ultimoResultado = null;
   var totales = { bloques: 0, bytes: 0, descargaMs: 0, conteoMs: 0 };
-  var contador = null;
+  var HILOS = Math.max(1, Math.min(navigator.hardwareConcurrency || 2, 16));   // hilos lógicos del celular
+  var hilos = [], trabajo = null;
 
   function $(id) { return document.getElementById(id); }
   function fmt(n, d) { return Number(n).toLocaleString('es', { minimumFractionDigits: d || 0, maximumFractionDigits: d || 0 }); }
@@ -73,6 +74,7 @@
       idioma: navigator.language || null, zona_horaria: zona,
       red: cn ? ((cn.effectiveType || '') + (cn.downlink ? ' · ' + cn.downlink + ' Mb/s' : '')) || null : null,   // no existe en Safari
       nucleos: navigator.hardwareConcurrency || null,     // hilos lógicos del procesador
+      hilos_conteo: Math.max(1, Math.min(navigator.hardwareConcurrency || 2, 16)),   // hilos que usa esta página para contar
       memoria_gb: navigator.deviceMemory || null      // solo en Chrome y en contexto seguro (https); en http no existe
     };
   }
@@ -82,26 +84,57 @@
   $('nuc').textContent = info.nucleos || 'No disponible';
   $('pan').textContent = info.pantalla || 'No disponible';
   $('tipo').textContent = info.tipo || 'No disponible';
+  $('hil').textContent = info.hilos_conteo + (info.nucleos ? ' de ' + info.nucleos : '');
 
-  // --- Web Worker de conteo ---
+  // --- Web Workers de conteo: uno por hilo del celular ---
+  // Cada bloque se parte en tantas partes como hilos (cortando siempre tras un salto de línea), cada parte la cuenta un
+  // Web Worker distinto en paralelo y aquí se suman los resultados. El tiempo de conteo informado es el tiempo real
+  // (reloj de pared) desde que se reparte el bloque hasta que termina la última parte.
   function crearContador() {
-    contador = new Worker('/static/worker/conteo.js');
-    contador.onmessage = function (e) {
+    for (var i = 0; i < HILOS; i++) hilos.push(crearHilo());
+  }
+  function crearHilo() {
+    var h = new Worker('/static/worker/conteo.js');
+    h.onmessage = function (e) {
       var m = e.data;
-      if (!tareaActual || m.id !== tareaActual.task_id) return;
+      if (!trabajo || m.id !== trabajo.id || !tareaActual || m.id !== tareaActual.task_id) return;
       if (m.tipo === 'progreso') {
-        progresoActual = m.pct;
-        barra(m.pct);
+        trabajo.pct[m.parte] = m.pct;
+        var hecho = 0;
+        for (var k = 0; k < trabajo.largos.length; k++) hecho += trabajo.pct[k] * trabajo.largos[k];
+        progresoActual = trabajo.total ? hecho / trabajo.total : 100;
+        barra(progresoActual);
       } else if (m.tipo === 'listo') {
-        var tc = tareaActual.tDescargaMs;
-        ultimoResultado = { type: 'result', task_id: m.id, conteo: m.conteo, bytes: m.bytes,
-                            t_transfer_ms: tc, t_proceso_ms: m.ms };
-        enviarResultado(ultimoResultado);
+        trabajo.pct[m.parte] = 100;
+        trabajo.suma = ConteoADN.sumar(trabajo.suma, m.conteo);
+        trabajo.faltan -= 1;
+        if (trabajo.faltan === 0) terminarConteo();
       }
     };
-    contador.onerror = function () {
+    h.onerror = function () {
       estado('Error', 'error', 'El procesamiento en segundo plano falló. Recarga la página.');
     };
+    return h;
+  }
+  function terminarConteo() {
+    var t = trabajo; trabajo = null;
+    ultimoResultado = { type: 'result', task_id: t.id, conteo: t.suma, bytes: t.total,
+                        t_transfer_ms: tareaActual.tDescargaMs, t_proceso_ms: Math.round(performance.now() - t.t0) };
+    enviarResultado(ultimoResultado);
+  }
+  function contarEnHilos(id, buf) {
+    var bytes = new Uint8Array(buf);
+    // los bloques pequeños no compensan el reparto: una sola parte
+    var n = bytes.length < 256 * 1024 ? 1 : Math.min(hilos.length, 64);
+    var partes = ConteoADN.partirEnLineas(bytes, n);
+    trabajo = { id: id, total: bytes.length, faltan: partes.length, suma: { A: 0, T: 0, C: 0, G: 0, otros: 0 },
+                pct: [], largos: partes.map(function (p) { return p[1] - p[0]; }), t0: performance.now() };
+    if (!partes.length) { terminarConteo(); return; }
+    partes.forEach(function (p, i) {
+      trabajo.pct[i] = 0;
+      var trozo = buf.slice(p[0], p[1]);                         // copia de esta parte; se transfiere sin copiar de nuevo
+      hilos[i].postMessage({ id: id, parte: i, buffer: trozo }, [trozo]);
+    });
   }
 
   // --- WebSocket ---
@@ -193,7 +226,7 @@
       .then(function (buf) {
         tareaActual.tDescargaMs = performance.now() - t0;
         estado('Procesando', '', 'Contando bases del bloque ' + (t.indice + 1) + ' de ' + t.total + '.');
-        contador.postMessage({ id: t.task_id, buffer: buf }, [buf]);     // se transfiere sin copiar
+        contarEnHilos(t.task_id, buf);
       })
       .catch(function () {
         // El bloque se reasignó o la red falló: el Master ya lo devolvió a la cola; se pide otro.
@@ -206,7 +239,7 @@
     salidaVoluntaria = true;
     clearInterval(temporizadorLatido);
     if (ws) ws.close();
-    if (contador) contador.terminate();
+    hilos.forEach(function (h) { h.terminate(); });
     estado('Desconectado', 'alerta', 'Este celular salió de la sesión. Escanea el QR para volver a unirte.');
     barra(0);
   };

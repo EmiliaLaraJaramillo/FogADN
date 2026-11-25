@@ -39,6 +39,7 @@ def limpiar_info(bruta: dict) -> Dict[str, object]:
     bruta = bruta or {}
     nucleos = bruta.get("nucleos")
     memoria = bruta.get("memoria_gb")
+    hc = bruta.get("hilos_conteo")
     return dict(
         modelo=_texto(bruta.get("modelo")),
         plataforma=_texto(bruta.get("plataforma")),
@@ -51,6 +52,7 @@ def limpiar_info(bruta: dict) -> Dict[str, object]:
         idioma=_texto(bruta.get("idioma"), 20),
         zona_horaria=_texto(bruta.get("zona_horaria"), 40),
         red=_texto(bruta.get("red"), 30),
+        hilos_conteo=int(hc) if isinstance(hc, (int, float)) and hc > 0 else NO_DISPONIBLE,
     )
 
 

@@ -36,6 +36,26 @@
     return { A: A, T: T, C: C, G: G, otros: total - A - T - C - G - blancos };
   }
 
-  var api = { contarBloque: contarBloque, nuevoEstado: nuevoEstado, resumir: resumir };
+  // Parte un bloque en `n` rangos [desde, hasta) contiguos; cada corte cae justo despues de un salto de linea, de modo
+  // que cada parte empieza al inicio de una linea y puede contarse por separado (en otro hilo) con el mismo resultado.
+  function partirEnLineas(bytes, n) {
+    var len = bytes.length, partes = [], ini = 0;
+    for (var k = 1; k <= n; k++) {
+      var fin = len;
+      if (k < n) {
+        fin = Math.max(ini, Math.floor(len * k / n));
+        while (fin > 0 && fin < len && bytes[fin - 1] !== 10) fin++;
+      }
+      if (fin > ini) partes.push([ini, fin]);
+      ini = fin;
+    }
+    return partes;
+  }
+
+  function sumar(a, b) {
+    return { A: a.A + b.A, T: a.T + b.T, C: a.C + b.C, G: a.G + b.G, otros: a.otros + b.otros };
+  }
+
+  var api = { contarBloque: contarBloque, nuevoEstado: nuevoEstado, resumir: resumir, partirEnLineas: partirEnLineas, sumar: sumar };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else raiz.ConteoADN = api;
 })(typeof self !== 'undefined' ? self : this);

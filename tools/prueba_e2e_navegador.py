@@ -46,6 +46,9 @@ def main(a):
             nav = p.chromium.launch(channel="msedge", headless=True)
             ctx1 = nav.new_context(viewport=dict(width=390, height=844), is_mobile=True)
             ctx2 = nav.new_context(viewport=dict(width=390, height=844), is_mobile=True)
+            if a.hilos:                                            # simula un celular con ese número de hilos
+                for c in (ctx1, ctx2):
+                    c.add_init_script(f"Object.defineProperty(navigator, 'hardwareConcurrency', {{get: () => {a.hilos}}});")
             p1 = ctx1.new_page()
             p1.on("pageerror", lambda e: print("ERROR JS p1:", e))
             p1.goto(f"{BASE}/worker?token={token}")
@@ -61,11 +64,14 @@ def main(a):
                 time.sleep(0.2)
             print("texto del celular 2:", p2.inner_text("#estado"), "|", p2.inner_text("#detalle"))
             print("núcleos/navegador/plataforma:", p2.inner_text("#nuc"), "|", p2.inner_text("#nav"), "|", p2.inner_text("#plat"))
+            print("hilos usados al contar:", p2.inner_text("#hil"), "| tiempo de conteo:", p2.inner_text("#t-cont"))
             nav.close()
         est = get("/api/estado")
         esperado = json.loads((RAIZ / "data" / (a.archivo + ".esperado.json")).read_text())["esperado"]
         s = est["sesion"]
         print("estado:", s["estado"], "| bloques:", s["completados"], "/", s["bloques"], "| participantes:", s["workers_participantes"])
+        print(f"tiempo total de conteo (suma de los celulares): {s['t_proceso_s']} s para {s['bytes'] / 1048576:.0f} MB "
+              f"-> {s['bytes'] / 1048576 / max(s['t_proceso_s'], 1e-9):.0f} MB/s por celular")
         print("eventos:", [e["texto"] for e in est["eventos"]])
         exacto = s["conteo"] == esperado
         print("conteo exacto:", exacto)
@@ -78,4 +84,5 @@ if __name__ == "__main__":
     p = argparse.ArgumentParser()
     p.add_argument("archivo", nargs="?", default="prueba_5mb.fna")
     p.add_argument("--bloque-kb", type=int, default=512)
+    p.add_argument("--hilos", type=int, default=0, help="fuerza navigator.hardwareConcurrency (0 = el real)")
     sys.exit(main(p.parse_args()))
