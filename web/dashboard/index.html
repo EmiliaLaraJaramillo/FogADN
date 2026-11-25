@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#fbfbfd">
+<title>Fog ADN · Master</title>
+<link rel="stylesheet" href="/static/dashboard/dashboard.css">
+</head>
+<body>
+
+<!-- A · Panel principal: una sola barra compacta -->
+<header class="barra">
+  <div class="barra-in">
+    <a class="marca" href="#"><span class="logo" aria-hidden="true"></span>Fog ADN</a>
+    <div class="chips">
+      <div class="chip"><span class="et">Master</span><b id="p-host">—</b></div>
+      <div class="chip"><span class="et">Estado</span><b id="p-estado"><i class="punto"></i>Listo</b><small id="p-estado-d">Sin procesamiento</small></div>
+      <div class="chip"><span class="et">Red</span><b id="p-red">—</b></div>
+      <div class="chip"><span class="et">Workers</span><b id="p-workers">0</b><small id="p-workers-d">Ningún celular</small></div>
+    </div>
+    <span id="reloj" class="reloj">—</span>
+  </div>
+</header>
+
+<div class="app">
+
+  <!-- Panel izquierdo: archivo y dispositivos -->
+  <aside class="lateral" aria-label="Archivo y dispositivos">
+    <section class="panel" id="archivo">
+      <h2>Archivo</h2>
+      <div id="zona" class="zona" tabindex="0" role="button" aria-label="Soltar un archivo .fna o pulsar para elegirlo">
+        <div class="zona-icono" aria-hidden="true"></div>
+        <div><b>Suelta un .fna aquí</b><span>o pulsa para elegirlo</span></div>
+        <input id="entrada" type="file" accept=".fna" hidden>
+      </div>
+      <div id="subida" class="subida" hidden>
+        <div class="fila"><span id="subida-nombre"></span><span id="subida-pct">0 %</span></div>
+        <div class="progreso"><div id="subida-barra"></div></div>
+      </div>
+      <p id="subida-msg" class="msg" role="status"></p>
+
+      <h3>Archivos recientes</h3>
+      <ul id="lista-archivos" class="lista"></ul>
+
+      <div class="fila ajuste">
+        <label for="tam-bloque">Tamaño de bloque</label>
+        <select id="tam-bloque">
+          <option value="1">1 MB</option><option value="4">4 MB</option><option value="8">8 MB</option>
+          <option value="16" selected>16 MB</option>
+        </select>
+      </div>
+      <div class="acciones">
+        <button id="btn-iniciar" class="primario" type="button" disabled>Iniciar procesamiento</button>
+        <button id="btn-cancelar" class="secundario" type="button" hidden>Cancelar</button>
+      </div>
+      <p id="archivo-msg" class="msg" role="status"></p>
+    </section>
+
+    <section class="panel" id="dispositivos">
+      <h2>Dispositivos</h2>
+      <div class="fila">
+        <button id="btn-agregar" class="secundario" type="button">Agregar dispositivo</button>
+        <span class="contador"><b id="c-n">0</b> conectados</span>
+      </div>
+    </section>
+
+    <p class="pie">Fog (Master) · Edge (celulares) · Cloud: no activado; la arquitectura queda preparada.</p>
+  </aside>
+
+  <!-- Zona principal: el procesamiento primero -->
+  <main class="central">
+
+    <!-- E + F · Procesamiento y conteo en vivo -->
+    <section class="tarjeta" id="proceso" aria-live="off">
+      <div class="fila cab-proc">
+        <div class="cab-nombre"><span class="et">Procesamiento</span><b id="e-archivo">Sin archivo</b></div>
+        <span id="e-pct" class="pct">0 %</span>
+      </div>
+      <div class="progreso alto"><div id="e-barra"></div></div>
+
+      <div class="vivo">
+        <div id="bases" class="bases">
+          <div class="base" data-b="A"><span>A</span><b>—</b><div class="progreso"><div></div></div></div>
+          <div class="base" data-b="T"><span>T</span><b>—</b><div class="progreso"><div></div></div></div>
+          <div class="base" data-b="C"><span>C</span><b>—</b><div class="progreso"><div></div></div></div>
+          <div class="base" data-b="G"><span>G</span><b>—</b><div class="progreso"><div></div></div></div>
+        </div>
+        <div class="lado">
+          <div class="total"><span class="et">Bases procesadas (A + T + C + G)</span><b id="r-total">—</b><small id="r-otros"></small></div>
+          <div class="metricas">
+            <div><span class="et">Velocidad</span><b id="e-vel">—</b></div>
+            <div><span class="et">Tiempo</span><b id="e-tiempo">—</b></div>
+            <div><span class="et">Bloques</span><b id="e-bloques">—</b></div>
+            <div><span class="et">Transf. / conteo</span><b id="e-tt">—</b></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="pie-proc">
+        <div class="estados-b">
+          <span><i class="cuad p"></i>Pendientes <b id="e-p">0</b></span>
+          <span><i class="cuad a"></i>Asignados <b id="e-a">0</b></span>
+          <span><i class="cuad c"></i>Completados <b id="e-c">0</b></span>
+          <span>Workers participantes <b id="e-part">—</b></span>
+          <span>Tamaño <b id="e-tam">—</b></span>
+        </div>
+        <div id="mapa" class="mapa" aria-label="Mapa de bloques"></div>
+      </div>
+    </section>
+
+    <!-- D · Workers y detalle del resultado -->
+    <div class="fila-2">
+      <section class="tarjeta" id="sec-workers">
+        <div class="fila"><h2>Workers</h2><span class="contador"><b id="c-n2">0</b> conectados</span></div>
+        <div id="workers" class="cuadricula-w"></div>
+        <p id="sin-workers" class="vacio">Todavía no hay celulares conectados. Usa «Agregar dispositivo» en el panel izquierdo.</p>
+      </section>
+
+      <section class="tarjeta" id="resultados">
+        <h2>Resultado de la ejecución</h2>
+        <dl class="ficha">
+          <div><dt>Archivo</dt><dd id="r-archivo">—</dd></div>
+          <div><dt>Estado</dt><dd id="r-estado">—</dd></div>
+          <div><dt>Inicio</dt><dd id="r-inicio">—</dd></div>
+          <div><dt>Fin</dt><dd id="r-fin">—</dd></div>
+          <div><dt>Duración</dt><dd id="r-dur">—</dd></div>
+          <div><dt>Workers</dt><dd id="r-w">—</dd></div>
+          <div><dt>Tamaño</dt><dd id="r-tam">—</dd></div>
+          <div><dt>Bloques</dt><dd id="r-bl">—</dd></div>
+          <div><dt>Velocidad media</dt><dd id="r-vel">—</dd></div>
+        </dl>
+        <div class="acciones">
+          <a id="exp-csv" class="secundario enlace-b" href="/api/resultado.csv" download aria-disabled="true">Exportar CSV</a>
+          <a id="exp-json" class="secundario enlace-b" href="/api/resultado.json" download aria-disabled="true">Exportar JSON</a>
+        </div>
+        <h3>Eventos recientes</h3>
+        <ul id="eventos" class="eventos"></ul>
+      </section>
+    </div>
+
+    <!-- G · Historial -->
+    <section class="tarjeta" id="historial">
+      <div class="fila">
+        <h2>Historial</h2>
+        <span class="acciones sin-margen">
+          <a id="his-csv" class="secundario enlace-b" href="/api/historial.csv" download>Exportar CSV</a>
+          <a id="his-json" class="secundario enlace-b" href="/api/historial.json" download>Exportar JSON</a>
+        </span>
+      </div>
+      <div class="tabla-caja">
+        <table class="tabla">
+          <thead><tr><th>Archivo</th><th>Inicio</th><th>Duración</th><th>Workers</th><th>Estado</th>
+            <th class="n">A</th><th class="n">T</th><th class="n">C</th><th class="n">G</th><th class="n">Total de bases</th></tr></thead>
+          <tbody id="his-cuerpo"></tbody>
+        </table>
+      </div>
+      <p id="his-vacio" class="vacio">Aún no hay ejecuciones registradas. Cada procesamiento terminado o cancelado queda aquí.</p>
+    </section>
+  </main>
+</div>
+
+<!-- Ventana del QR -->
+<div id="modal" class="modal" hidden>
+  <div class="modal-caja" role="dialog" aria-modal="true" aria-labelledby="modal-titulo">
+    <button id="modal-cerrar" class="cerrar" type="button" aria-label="Cerrar">×</button>
+    <h3 id="modal-titulo">Agregar dispositivo</h3>
+    <div id="qr" class="qr" aria-label="Código QR de incorporación"></div>
+    <p class="url" id="qr-url"></p>
+    <ol class="pasos">
+      <li>Conecta el celular a la misma red Wi-Fi que este computador.</li>
+      <li>Abre la cámara y escanea el código.</li>
+      <li>Mantén la pantalla encendida mientras procesa.</li>
+    </ol>
+    <div class="fila ajuste">
+      <label for="sel-ip">Red del Master</label>
+      <select id="sel-ip"></select>
+    </div>
+    <p class="msg">El código vence en <span id="qr-vig">5</span> min. Los celulares ya unidos no se ven afectados.</p>
+    <button id="qr-renovar" class="secundario" type="button">Generar un código nuevo</button>
+  </div>
+</div>
+
+<script src="/static/dashboard/dashboard.js"></script>
+</body>
+</html>

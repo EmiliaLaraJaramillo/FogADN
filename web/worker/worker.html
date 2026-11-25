@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f5f5f7">
+<title>Worker · Fog ADN</title>
+<link rel="stylesheet" href="/static/worker/worker.css">
+</head>
+<body>
+<main>
+  <header>
+    <div class="marca" aria-hidden="true"></div>
+    <h1>Fog ADN</h1>
+    <p class="sub">Este celular procesa bloques de ADN para el Master</p>
+  </header>
+
+  <section class="tarjeta" aria-live="polite">
+    <div class="fila"><span class="etiqueta">Estado</span><span id="estado" class="pastilla">Conectando…</span></div>
+    <p id="detalle" class="detalle">Abriendo la conexión con el Master.</p>
+    <div class="barra" role="progressbar" aria-label="Progreso del bloque" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barra">
+      <div id="relleno"></div>
+    </div>
+    <p id="bloque" class="bloque">&nbsp;</p>
+  </section>
+
+  <section class="tarjeta cuadricula">
+    <div><span class="etiqueta">Bloques</span><b id="n-bloques">0</b></div>
+    <div><span class="etiqueta">Datos</span><b id="n-mb">0 MB</b></div>
+    <div><span class="etiqueta">Descarga</span><b id="t-desc">0 s</b></div>
+    <div><span class="etiqueta">Conteo</span><b id="t-cont">0 s</b></div>
+  </section>
+
+  <section class="tarjeta pequena">
+    <div class="fila"><span class="etiqueta">Identificador</span><span id="wid">—</span></div>
+    <div class="fila"><span class="etiqueta">Navegador</span><span id="nav">—</span></div>
+    <div class="fila"><span class="etiqueta">Plataforma</span><span id="plat">—</span></div>
+    <div class="fila"><span class="etiqueta">Núcleos lógicos</span><span id="nuc">—</span></div>
+  </section>
+
+  <p class="aviso">Mantén esta pantalla encendida y esta pestaña abierta mientras se procesa.</p>
+  <button id="salir" type="button">Desconectar este celular</button>
+</main>
+<script src="/static/worker/worker.js"></script>
+</body>
+</html>
